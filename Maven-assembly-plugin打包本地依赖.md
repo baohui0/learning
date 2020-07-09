@@ -1,78 +1,83 @@
 使用maven-assmbly-plugin插件进行打包时如何将本地依赖和仓库依赖
 ===================================================================
 在maven管理的项目中，如果需要引入一个本地依赖包，使用如下方式引入
-"```  
-   <dependency>
-        <groupId>com.alita.kit</groupId>
-        <artifactId>alitaKit</artifactId>
-        <version>1.0.0</version>
-        <scope>system</scope>
-        <systemPath>${pom.basedir}/resources/lib/alitaKit.jar</systemPath>
-    </dependency> ```"
-其中` <scope>system</scope> `标签表示此依赖在本地系统中,` <systemPath>${pom.basedir}****</systemPath>`是本地jar包引用的位置，则在编译过程能正常执行，但是打包时assmbly的默认配置并不会将本地依赖一起打包。
+```xml
+<dependency>
+    <groupId>com.alita.kit</groupId>
+    <artifactId>alitaKit</artifactId>
+    <version>1.0.0</version>
+    <scope>system</scope>
+    <systemPath>${pom.basedir}/resources/lib/alitaKit.jar</systemPath>
+</dependency> 
+```
+其中` <scope>system</scope> `标签表示此依赖在本地系统中,`<systemPath>${pom.basedir}****</systemPath>`是本地jar包引用的位置，则在编译过程能正常执行，但是打包时assmbly的默认配置并不会将本地依赖一起打包。
 默认的maven-assmbly-plugin配置：
-    ``` <plugin>
-            <artifactId>maven-assembly-plugin</artifactId>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>主程序入口方法</mainClass>
-                        </manifest>
-                        <manifestEntries>
-                            <Class-Path>.</Class-Path>
-                        </manifestEntries>
-                    </archive>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                </execution>
-            </executions>
-        </plugin> ```
+```xml
+<plugin>
+    <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+            <archive>
+                <manifest>
+                    <mainClass>主程序入口方法</mainClass>
+                </manifest>
+                <manifestEntries>
+                    <Class-Path>.</Class-Path>
+                </manifestEntries>
+            </archive>
+            <descriptorRefs>
+                <descriptorRef>jar-with-dependencies</descriptorRef>
+            </descriptorRefs>
+        </configuration>
+        <executions>
+            <execution>
+                <id>make-assembly</id>
+                <phase>package</phase>
+                <goals>
+                    <goal>single</goal>
+                </goals>
+        </execution>
+    </executions>
+</plugin>
+```
 注意：如果需要将本地依赖包一起打包则需要修改默认配置：
-``` <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>主程序入口方法</mainClass>
-                        </manifest>
-                        <manifestEntries>
-                            <Class-Path>.</Class-Path>
-                        </manifestEntries>
-                    </archive>
-                    <!-- 将这一段注释掉 -->
-                    <!--<descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>-->
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <!-- 增加配置 -->
-                        <configuration>
-                            <!-- assembly.xml文件路径 -->
-                            <descriptors>
-                                <descriptor>resources/assembly.xml</descriptor>
-                            </descriptors>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+```xml
+<plugin>
+    <artifactId>maven-assembly-plugin</artifactId>
+    <configuration>
+        <archive>
+            <manifest>
+                <mainClass>主程序入口方法</mainClass>
+            </manifest>
+            <manifestEntries>
+                <Class-Path>.</Class-Path>
+            </manifestEntries>
+        </archive>
+        <!-- 将这一段注释掉 -->
+        <!--<descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+        </descriptorRefs>-->
+    </configuration>
+    <executions>
+        <execution>
+            <id>make-assembly</id>
+            <phase>package</phase>
+            <goals>
+                <goal>single</goal>
+            </goals>
+            <!-- 增加配置 -->
+            <configuration>
+                <!-- assembly.xml文件路径 -->
+                <descriptors>
+                    <descriptor>resources/assembly.xml</descriptor>
+                </descriptors>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
 ```
 assembly.xml的文件配置如下：
-``` <assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.0"
+``` xml
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.0 http://maven.apache.org/xsd/assembly-1.1.0.xsd">
     <!-- TODO: a jarjar format would be better -->
