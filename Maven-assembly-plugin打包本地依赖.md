@@ -1,5 +1,6 @@
 ##使用maven-assmbly-plugin插件进行打包时如何将本地依赖和仓库依赖
 在maven管理的项目中，如果需要引入一个本地依赖包，使用如下方式引入
+
 `  <dependency>
         <groupId>com.alita.kit</groupId>
         <artifactId>alitaKit</artifactId>
