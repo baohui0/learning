@@ -2,13 +2,13 @@
 ===================================================================
 在maven管理的项目中，如果需要引入一个本地依赖包，使用如下方式引入
 
-`  <dependency>
+```  <dependency>
         <groupId>com.alita.kit</groupId>
         <artifactId>alitaKit</artifactId>
         <version>1.0.0</version>
         <scope>system</scope>
         <systemPath>${pom.basedir}/resources/lib/alitaKit.jar</systemPath>
-    </dependency> `
+    </dependency> ```
 其中` <scope>system</scope> `标签表示此依赖在本地系统中,` <systemPath>${pom.basedir}****</systemPath>`是本地jar包引用的位置，则在编译过程能正常执行，但是打包时assmbly的默认配置并不会将本地依赖一起打包。
 默认的maven-assmbly-plugin配置：
     ` <plugin>
