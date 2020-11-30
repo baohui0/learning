@@ -198,15 +198,6 @@ systemctl enable firewalld	#重启防火墙
    sudo sysctl --system
    ```
 
-5. 
-
-6. 
-
-7. 
-
-   
-
-
 
 ## 2.安装相关工具
 
@@ -256,7 +247,7 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
 exclude=kube*
-
+EOF
 
 yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
 
@@ -316,7 +307,7 @@ kubeadm init <args>
 例:
 
 ```bash
-sudo kubeadm init --pod-network-cidr 192.168.0.0/16  --image-repository registry.cn-hangzhou.aliyuncs.com/google_containers	#指定了一个CIDR(Classless Inter-Domain Routing)，使用阿里云镜像源
+sudo kubeadm init --pod-network-cidr 10.244.0.0/16  --image-repository registry.cn-hangzhou.aliyuncs.com/google_containers	#指定了一个CIDR(Classless Inter-Domain Routing)，使用阿里云镜像源
 ```
 
 该命令执行完毕后会拉去镜像，然后输出一条kubeadm join xxx相关命令，并保存下来，如:
@@ -383,6 +374,8 @@ To start using your cluster, you need to run the following as a regular user:
   mkdir -p $HOME/.kube			
   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+  
+  KUBECONFIG=/etc/kubernetes/kubelet.conf
 
 You should now deploy a pod network to the cluster.
 Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
@@ -402,7 +395,55 @@ Then you can join any number of worker nodes by running the following on each as
 
 ```bash
 #部署calico
-kubectl apply -f https://docs.projectcalico.org/v3.14/manifests/calico.yaml
+https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+
+vim calico.yaml
+
+1）修改ipip模式关闭 和typha_service_name
+
+modprobe -r ipip删除tunl0网络
+
+- name: CALICO_IPV4POOL_IPIP
+value: "off"
+
+
+typha_service_name: "calico-typha"
+
+
+
+
+calico网络，默认是ipip模式（在每台node主机创建一个tunl0网口，这个隧道链接所有的node容器网络，官网推荐不同的ip网段适合，比如aws的不同区域主机），
+
+修改成BGP模式，它会以daemonset方式安装在所有node主机，每台主机启动一个bird(BGP client)，它会将calico网络内的所有node分配的ip段告知集群内的主机，并通过本机的网卡eth0或者ens33转发数据；
+
+2）修改replicas
+
+  replicas: 1
+  revisionHistoryLimit: 2
+
+3）修改pod的网段CALICO_IPV4POOL_CIDR
+
+- name: CALICO_IPV4POOL_CIDR
+value: "10.244.0.0/16"
+4）如果手动下载镜像请查看calico.yaml 文件里面标注的镜像版本 否则可以直接执行会自动下载
+5）部署calico
+kubectl apply -f calico.yaml
+
+6）查看
+kubectl get po --all-namespaces
+此时你会发现是pending状态是因为node节点还没有相关组件
+7） 验证是否为bgp模式
+# ip route show
+default via 172.31.143.253 dev eth0 
+blackhole 10.244.0.0/24 proto bird 
+10.244.0.2 dev caliac6de7553e8 scope link 
+10.244.0.3 dev cali1591fcccf0f scope link 
+10.244.1.0/24 via 172.31.135.237 dev eth0 proto bird 
+10.244.2.0/24 via 172.31.135.238 dev eth0 proto bird 
+169.254.0.0/16 dev eth0 scope link metric 1002 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 
+172.31.128.0/20 dev eth0 proto kernel scope link src 172.31.135.239 
+
 ```
 
 然后等带所有的pod都为running状态则Master机器部署成功.(如果此时只有node和calico-controller的pod处于pendding状态，表示集群正在等带节点加入，至少一个节点加入集群状态才为正常)
@@ -490,4 +531,81 @@ kubeadm reset
 kubectl drain <node name> --delete-local-data --force --ignore-daemonsets
 ```
 
-​	
+### 4.2 删除Master节点
+
+​	想要完全删除Master节点就需要删除集群有关的数据
+
+```bash
+kubectl config delete-cluster kubernetes
+#使用kubeadm删除集群数据
+kubeadm reset
+
+#手动删除集群残留数据
+rm -rf /etc/kubernetes
+rm -rf $HOME/.kube
+rm -rf /etc/cni/net.d
+rm -rf /var/lib/etcd
+iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+ipvsadm -C
+rm -rf /var/lib/cni
+
+```
+
+
+
+## 5.使用集群部署一个应用Pod
+
+### 5.1 使用kubectl部署Pod
+
+一般使用 yaml(或 json)来描述发布配置. 下面是一个简单的描述文件: `nginx-pod.yaml`
+
+```yaml
+apiVersion: v1      # 描述文件所遵循 KubernetesAPI 的版本
+kind: Pod           # 描述的类型是 pod
+metadata:
+  name: nginx-pod   # pod 的名称
+  labels:           # 标签
+    app: nginx-pod
+    env: test
+spec:
+  containers:
+    - name: nginx-pod     # 容器名
+      image: nginx:1.18   # 镜像名称及版本
+      imagePullPolicy: IfNotPresent   # 如果本地不存在就去远程仓库拉取
+      ports:
+        - containerPort: 80   # pod 对外端口
+  restartPolicy: Always
+```
+
+在Master机器上执行以下命令:
+
+```bash
+kubectl apply -f nginx-pod.yaml
+
+kubectl get pods			#检查Pod状态
+NAME        READY   STATUS    RESTARTS   AGE
+nginx-pod   1/1     Running   0          39s
+```
+
+### 5.2 使用Dashboard部署Pod
+
+将yaml文件输入并上传即可创建Pod
+
+![image-20201117120027497](/home/zou/.config/Typora/typora-user-images/image-20201117120027497.png)
+
+### 5.3 访问这个nginx应用
+
+此时部署的Pod并不能访问，需要通过端口转发才能访问.下面命令使用宿主机的9999端口进行转发
+
+```bash
+kubectl port-forward --address 0.0.0.0 nginx-pod 9999:80
+Forwarding from 0.0.0.0:9999 -> 80
+Handling connection for 9999
+```
+
+### 5.4 将服务暴露给外部客户端的几种方式
+
+- 通过 `port-forward` 转发, 这种方式操作方便、适合调试时使用, **不适用于生产环境** .
+- 通过 `NodePort`, 此时集群中每一个节点 (Node) 都会监听指定端口, 我们通过任意节点的端口即可访问到指定服务. 但过多的服务会开启大量端口难以维护.
+- 通过 `LoadBalance` 来暴露服务. `LoadBalance(负载均衡 LB)` 通常由云服务商提供, 如果云环境中不提供 LB 服务, 我们通常直接使用 `Ingress`, 或使用 `MetalLB` 来自行配置 LB.
+- 通过 `Ingress` 公开多个服务. `Ingress` 公开了从群集外部到群集内 `services` 的 HTTP 和 HTTPS 路由. 流量路由由 `Ingress` 资源上定义的规则控制. 在云服务商不提供 LB 服务的情况下, 我们可以直接使用 `Ingress` 来暴露服务. (另外, 使用 `LB + Ingress` 的部署方案可以避免过多 LB 应用带来的花费).
