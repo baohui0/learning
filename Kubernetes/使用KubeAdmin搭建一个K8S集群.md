@@ -401,7 +401,7 @@ vim calico.yaml
 
 1）修改ipip模式关闭 和typha_service_name
 
-modprobe -r ipip删除tunl0网络
+modprobe -r ipip #删除tunl0网络
 
 - name: CALICO_IPV4POOL_IPIP
 value: "off"
